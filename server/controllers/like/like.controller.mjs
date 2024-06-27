@@ -13,24 +13,20 @@ export const likeController = async (request, response) => {
   const { userName, postId } = value;
 
   try {
-    let foundLikedUser = false;
-
     const database = mongoose.connection.db;
 
     const existingUser = await database
       .collection("users")
       .findOne({ userName: { $eq: userName } });
 
-    if (!existingUser) {
+    if (existingUser === null || !existingUser) {
       return response.status(404).json({ responseMessage: "User not found." });
     }
 
     const existingPosts = await database.collection("posts").find({}).toArray();
 
-    if (existingPosts === null) {
-      return response
-        .status(500)
-        .json({ responseMessage: "Posts model could not be found." });
+    if (existingPosts === null || existingPosts.length === 0) {
+      return response.status(404).json({ responseMessage: "Post not found." });
     }
 
     for (const post of existingPosts) {
@@ -50,51 +46,27 @@ export const likeController = async (request, response) => {
       { $project: { userName: userName } },
     ]);
 
-    existingLikers.forEach((likedUser) => {
-      if (userName === likedUser.userName) {
-        foundLikedUser = true;
-      }
-    });
-
-    if (foundLikedUser) {
-      const existingPost = await LikeModel.findOneAndUpdate(
-        { _id: { $eq: new mongoose.Types.ObjectId(postId) } },
-        { $pull: { likes: { userName: userName } } },
-        { new: true, upsert: true }
-      );
-
-      if (!existingPost) {
-        return response
-          .status(404)
-          .json({ responseMessage: "Post not found." });
-      }
-
-      await LikeModel.findOneAndUpdate(
-        { _id: { $eq: new mongoose.Types.ObjectId(postId) } },
-        { totalLikes: existingPost.likes.length },
-        { new: true, upsert: true }
-      );
-
-      return response.status(200).json({ responseMessage: "Unlike" });
-    }
-
-    const existingPost = await LikeModel.findOneAndUpdate(
-      { _id: { $eq: new mongoose.Types.ObjectId(postId) } },
-      { $push: { likes: { userName: userName } } },
-      { new: true, upsert: true }
+    const foundLikedUser = existingLikers.some(
+      (likedUser) => userName === likedUser.userName
     );
 
-    if (!existingPost) {
-      return response.status(404).json({ responseMessage: "Post not found." });
+    if (foundLikedUser) {
+      await LikeModel.findOneAndUpdate(
+        { _id: { $eq: new mongoose.Types.ObjectId(postId) } },
+        { $pull: { likes: { userName: userName } }, $inc: { totalLikes: -1 } },
+        { new: true, upsert: true }
+      );
+
+      return response.status(200).json({ responseMessage: "Unlike." });
     }
 
     await LikeModel.findOneAndUpdate(
       { _id: { $eq: new mongoose.Types.ObjectId(postId) } },
-      { totalLikes: existingPost.likes.length },
+      { $push: { likes: { userName: userName } }, $inc: { totalLikes: 1 } },
       { new: true, upsert: true }
     );
 
-    return response.status(200).json({ responseMessage: "Like" });
+    return response.status(200).json({ responseMessage: "Liked." });
   } catch (error) {
     logger.log({
       level: "error",

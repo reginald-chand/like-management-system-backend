@@ -29,6 +29,14 @@ export const likeController = async (request, response) => {
       return response.status(404).json({ responseMessage: "Post not found." });
     }
 
+    const existingPostIds = new Set(
+      existingPosts.map((post) => post._id.toString())
+    );
+
+    if (!existingPostIds.has(postId.toString())) {
+      return response.status(404).json({ responseMessage: "Post not found." });
+    }
+
     for (const post of existingPosts) {
       const existingLikeDocument = await LikeModel.findOne({
         _id: { $eq: post._id },

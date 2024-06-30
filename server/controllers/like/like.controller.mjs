@@ -2,6 +2,7 @@ import { LikeModel } from "../../models/like/like.model.mjs";
 import { likeControllerValidator } from "../../validators/like/like.controller.validator.mjs";
 import { logger } from "../../configs/logger.config.mjs";
 import mongoose from "mongoose";
+import { redisClient } from "../../configs/redis.client.config.mjs";
 
 export const likeController = async (request, response) => {
   const { error, value } = likeControllerValidator.validate(request.body);
@@ -10,9 +11,15 @@ export const likeController = async (request, response) => {
     return response.status(400).json({ responseMessage: error.message });
   }
 
-  const { userName, postId } = value;
+  const { userName, postId, csrfToken, userData } = value;
 
   try {
+    const userSession = await redisClient.hGetAll(userData.email);
+
+    if (csrfToken !== userSession.csrfToken) {
+      return response.status(401).json({ responseMessage: "UnAuthorized." });
+    }
+
     const database = mongoose.connection.db;
 
     const existingUser = await database
